@@ -344,10 +344,30 @@ app.get("/eat", async (req, res) => {
 // Route GET pour récupérer les locations avec placeCategory === "partager_une_activité"
 app.get("/fun", async (req, res) => {
   try {
-    // Recherche dans la base de données
-    const locations = await Location.find({
-      placeCategory: "partager_une_activité",
-    });
+    const { postalCode, keywords, priceRange, filters } = req.query;
+
+    // Recherche initiale pour placeCategory === "partager_une_activité"
+    const baseFilter = { placeCategory: "partager_une_activité" };
+
+    // Ajout des autres filtres dynamiques
+    if (postalCode) baseFilter.postalCode = postalCode;
+    if (keywords) baseFilter.keywords = { $in: keywords.split(",") };
+    if (priceRange) baseFilter.priceRange = priceRange;
+    if (filters) {
+      // Convertir la chaîne de filtres en tableau
+      const filterArray = filters.split(","); // Exemple : "Décoration:Cosy,Ambiance:Branchée"
+      baseFilter.filters = { $all: filterArray }; // Tous les filtres doivent être présents
+    }
+
+    // Recherche avec les filtres combinés
+    const locations = await Location.find(baseFilter);
+
+    if (locations.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "Aucun lieu trouvé avec ces critères." });
+    }
+
     res.status(200).json(locations);
   } catch (error) {
     console.error("Erreur lors de la récupération des données:", error);
@@ -497,181 +517,6 @@ app.get("/filter-nearby", async (req, res) => {
   }
 });
 
-// Route pour modifier les keywords d'une instance
-app.put("/location/:id/keywords", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { action, keywords } = req.body;
-
-    if (!["add", "remove"].includes(action)) {
-      return res
-        .status(400)
-        .json({ message: "L'action doit être 'add' ou 'remove'" });
-    }
-
-    if (!Array.isArray(keywords)) {
-      return res.status(400).json({ message: "keywords doit être un tableau" });
-    }
-
-    const location = await Location.findById(id);
-    if (!location) {
-      return res.status(404).json({ message: "Instance non trouvée" });
-    }
-
-    if (action === "add") {
-      // Ajouter uniquement les nouveaux keywords (éviter les doublons)
-      const newKeywords = keywords.filter(
-        (k) => !location.keywords.includes(k)
-      );
-      location.keywords.push(...newKeywords);
-    } else {
-      // Retirer les keywords spécifiés
-      location.keywords = location.keywords.filter(
-        (k) => !keywords.includes(k)
-      );
-    }
-
-    await location.save();
-    res.json({
-      message: "Keywords mis à jour avec succès",
-      keywords: location.keywords,
-    });
-  } catch (error) {
-    console.error("Erreur lors de la modification des keywords:", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-});
-
-// Route pour modifier les filters d'une instance
-app.put("/location/:id/filters", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { action, filters } = req.body;
-
-    if (!["add", "remove"].includes(action)) {
-      return res
-        .status(400)
-        .json({ message: "L'action doit être 'add' ou 'remove'" });
-    }
-
-    if (!Array.isArray(filters)) {
-      return res.status(400).json({ message: "filters doit être un tableau" });
-    }
-
-    // Validation du format des filtres (clé:valeur)
-    const isValidFormat = filters.every((filter) => {
-      return typeof filter === "string" && filter.includes(":");
-    });
-
-    if (!isValidFormat) {
-      return res.status(400).json({
-        message:
-          "Chaque filtre doit être au format 'clé:valeur' (ex: 'Décoration:Cosy')",
-      });
-    }
-
-    const location = await Location.findById(id);
-    if (!location) {
-      return res.status(404).json({ message: "Instance non trouvée" });
-    }
-
-    // Initialiser le tableau des filtres s'il n'existe pas
-    if (!location.filters) {
-      location.filters = [];
-    }
-
-    if (action === "add") {
-      // Ajouter uniquement les nouveaux filtres (éviter les doublons)
-      filters.forEach((newFilter) => {
-        if (!location.filters.includes(newFilter)) {
-          location.filters.push(newFilter);
-        }
-      });
-    } else {
-      // Retirer les filtres spécifiés
-      location.filters = location.filters.filter(
-        (existingFilter) => !filters.includes(existingFilter)
-      );
-    }
-
-    await location.save();
-    res.json({
-      message: "Filtres mis à jour avec succès",
-      filters: location.filters,
-    });
-  } catch (error) {
-    console.error("Erreur lors de la modification des filtres:", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-});
-
-// Route pour mettre à jour l'adresse et le code postal d'une instance
-app.put("/location/:id/address", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { postalCode, locationAddress } = req.body;
-
-    // Vérification des champs requis
-    if (!postalCode || !locationAddress) {
-      return res.status(400).json({
-        message: "Le code postal et l'adresse sont requis",
-      });
-    }
-
-    const location = await Location.findById(id);
-    if (!location) {
-      return res.status(404).json({ message: "Instance non trouvée" });
-    }
-
-    // Mise à jour des champs
-    location.postalCode = postalCode;
-    location.locationAddress = locationAddress;
-
-    await location.save();
-    res.json({
-      message: "Adresse mise à jour avec succès",
-      postalCode: location.postalCode,
-      locationAddress: location.locationAddress,
-    });
-  } catch (error) {
-    console.error("Erreur lors de la mise à jour de l'adresse:", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-});
-
-// Route pour mettre à jour la description d'une instance
-app.put("/location/:id/description", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { locationDescription } = req.body;
-
-    // Vérification du champ requis
-    if (!locationDescription) {
-      return res.status(400).json({
-        message: "La description est requise",
-      });
-    }
-
-    const location = await Location.findById(id);
-    if (!location) {
-      return res.status(404).json({ message: "Instance non trouvée" });
-    }
-
-    // Mise à jour de la description
-    location.locationDescription = locationDescription;
-
-    await location.save();
-    res.json({
-      message: "Description mise à jour avec succès",
-      locationDescription: location.locationDescription,
-    });
-  } catch (error) {
-    console.error("Erreur lors de la mise à jour de la description:", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-});
-
-// Route pour la recherche globale
 app.get("/search", async (req, res) => {
   try {
     const { query } = req.query;
@@ -719,7 +564,7 @@ app.get("/search", async (req, res) => {
 // Route GET pour la page d'accueil
 app.get("/", (req, res) => {
   res.status(200).json({
-    message: "Bienvenue sur l'API des Locations ! 🚀",
+    message: "Bienvenue sur l'API des Locations ! ",
     endpoints: [
       { method: "POST", path: "/location", description: "Créer une nouvelle location" },
       { method: "GET", path: "/items", description: "Récupérer toutes les locations" },
@@ -743,5 +588,5 @@ app.get("/", (req, res) => {
 // Démarrage du serveur
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Serveur en écoute sur le port ${PORT} 🚀🚀🚀`);
+  console.log(`Serveur en écoute sur le port ${PORT} `);
 });
