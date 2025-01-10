@@ -585,6 +585,38 @@ app.get("/", (req, res) => {
   });
 });
 
+// Route pour mettre à jour la description d'une instance
+app.put("/location/:id/description", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { locationDescription } = req.body;
+
+    // Vérification du champ requis
+    if (!locationDescription) {
+      return res.status(400).json({
+        message: "La description est requise",
+      });
+    }
+
+    const location = await Location.findById(id);
+    if (!location) {
+      return res.status(404).json({ message: "Instance non trouvée" });
+    }
+
+    // Mise à jour de la description
+    location.locationDescription = locationDescription;
+
+    await location.save();
+    res.json({
+      message: "Description mise à jour avec succès",
+      locationDescription: location.locationDescription,
+    });
+  } catch (error) {
+    console.error("Erreur lors de la mise à jour de la description:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
 // Démarrage du serveur
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
