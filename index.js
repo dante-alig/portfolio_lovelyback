@@ -566,21 +566,81 @@ app.get("/", (req, res) => {
   res.status(200).json({
     message: "Bienvenue sur l'API des Locations ! ",
     endpoints: [
-      { method: "POST", path: "/location", description: "Créer une nouvelle location" },
-      { method: "GET", path: "/items", description: "Récupérer toutes les locations" },
-      { method: "GET", path: "/items/:id", description: "Récupérer une location par ID" },
-      { method: "PUT", path: "/items/:id", description: "Mettre à jour une location" },
-      { method: "DELETE", path: "/items/:id/photo", description: "Supprimer une photo d'une location" },
-      { method: "GET", path: "/drink", description: "Filtrer les lieux pour prendre un verre" },
-      { method: "GET", path: "/eat", description: "Récupérer les lieux pour manger ensemble" },
-      { method: "GET", path: "/fun", description: "Récupérer les lieux pour partager une activité" },
-      { method: "GET", path: "/filterCategories", description: "Filtrer et afficher les catégories" },
-      { method: "GET", path: "/filter-nearby", description: "Trouver des lieux à proximité" },
-      { method: "PUT", path: "/location/:id/keywords", description: "Modifier les mots-clés d'une location" },
-      { method: "PUT", path: "/location/:id/filters", description: "Modifier les filtres d'une location" },
-      { method: "PUT", path: "/location/:id/address", description: "Mettre à jour l'adresse d'une location" },
-      { method: "PUT", path: "/location/:id/description", description: "Mettre à jour la description d'une location" },
-      { method: "GET", path: "/search", description: "Effectuer une recherche globale" },
+      {
+        method: "POST",
+        path: "/location",
+        description: "Créer une nouvelle location",
+      },
+      {
+        method: "GET",
+        path: "/items",
+        description: "Récupérer toutes les locations",
+      },
+      {
+        method: "GET",
+        path: "/items/:id",
+        description: "Récupérer une location par ID",
+      },
+      {
+        method: "PUT",
+        path: "/items/:id",
+        description: "Mettre à jour une location",
+      },
+      {
+        method: "DELETE",
+        path: "/items/:id/photo",
+        description: "Supprimer une photo d'une location",
+      },
+      {
+        method: "GET",
+        path: "/drink",
+        description: "Filtrer les lieux pour prendre un verre",
+      },
+      {
+        method: "GET",
+        path: "/eat",
+        description: "Récupérer les lieux pour manger ensemble",
+      },
+      {
+        method: "GET",
+        path: "/fun",
+        description: "Récupérer les lieux pour partager une activité",
+      },
+      {
+        method: "GET",
+        path: "/filterCategories",
+        description: "Filtrer et afficher les catégories",
+      },
+      {
+        method: "GET",
+        path: "/filter-nearby",
+        description: "Trouver des lieux à proximité",
+      },
+      {
+        method: "PUT",
+        path: "/location/:id/keywords",
+        description: "Modifier les mots-clés d'une location",
+      },
+      {
+        method: "PUT",
+        path: "/location/:id/filters",
+        description: "Modifier les filtres d'une location",
+      },
+      {
+        method: "PUT",
+        path: "/location/:id/address",
+        description: "Mettre à jour l'adresse d'une location",
+      },
+      {
+        method: "PUT",
+        path: "/location/:id/description",
+        description: "Mettre à jour la description d'une location",
+      },
+      {
+        method: "GET",
+        path: "/search",
+        description: "Effectuer une recherche globale",
+      },
     ],
   });
 });
@@ -614,6 +674,80 @@ app.put("/location/:id/description", async (req, res) => {
   } catch (error) {
     console.error("Erreur lors de la mise à jour de la description:", error);
     res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+// Fonction pour convertir une adresse en coordonnées
+const addressToCoordinates = async (
+  address,
+  key,
+  locationDescription,
+  photo,
+  id
+) => {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+    address
+  )}&key=${apiKey}`;
+
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+
+    if (data.status === "OK") {
+      const location = data.results[0].geometry.location;
+      return {
+        key: key,
+        location: {
+          lat: location.lat,
+          lng: location.lng,
+        },
+        title: key,
+        description: locationDescription,
+        image: photo,
+        id: id,
+      };
+    } else {
+      throw new Error(`Erreur lors de la géolocalisation : ${data.status}`);
+    }
+  } catch (error) {
+    console.error("Erreur :", error.message);
+    return null;
+  }
+};
+
+// Route pour géocoder une adresse
+app.post("/geocode", async (req, res) => {
+  try {
+    const { address, key, locationDescription, photo, id } = req.body;
+
+    // Vérification des paramètres requis
+    if (!address || !key || !locationDescription || !photo || !id) {
+      return res.status(400).json({
+        error:
+          "Tous les paramètres sont requis (address, key, locationDescription, photo, id)",
+      });
+    }
+
+    // Utilisation de la fonction addressToCoordinates
+    const result = await addressToCoordinates(
+      address,
+      key,
+      locationDescription,
+      photo,
+      id
+    );
+
+    if (!result) {
+      return res
+        .status(404)
+        .json({ error: "Impossible de géocoder cette adresse" });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error("Erreur lors de la géolocalisation :", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
